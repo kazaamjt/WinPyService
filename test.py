@@ -1,4 +1,5 @@
 import WinPyService
 
 if __name__ == '__main__':
-	service = WinPyService.WinService('Name', False)
+	SERVICE = WinPyService.WinService('Name', False)
+	SERVICE.run()

@@ -26,8 +26,8 @@ bool ENABLE_PAUSE_CONTINUE;
 SERVICE_STATUS STATUS = { 0 };
 SERVICE_STATUS_HANDLE STATUS_HANDLE = NULL;
 
-HANDLE WORKER_PAUSE = INVALID_HANDLE_VALUE;
-HANDLE WORKER_CONTINUE = INVALID_HANDLE_VALUE;
+HANDLE WORKER_PAUSED = INVALID_HANDLE_VALUE;
+HANDLE WORKER_CONTINUED = INVALID_HANDLE_VALUE;
 
 HANDLE STOP_EVENT = INVALID_HANDLE_VALUE;
 HANDLE PAUSE_EVENT = INVALID_HANDLE_VALUE;
@@ -38,13 +38,26 @@ void WINAPI controlHandler(DWORD);
 void setAcceptedControls(bool);
 void setState(DWORD);
 
-void startup();
-void set_startup();
-void on_startup();
-
 typedef void (*simple_worker_callback) ();
 void setSimpleWorker(simple_worker_callback);
-simple_worker_callback simple_worker;
+simple_worker_callback simpleWorker;
+void SimpleServiceWrapper();
+
+typedef void (*simple_callback) ();
+
+void startup();
+void set_startup_callback(simple_callback);
+simple_callback startup_callback;
+
+void controlStop();
+void controlPause();
+void controlContinue();
+void controlStopOnPause();
+
+void confirmPause() { setState(SERVICE_PAUSED); }
+void confirmContinue();
+
+void exit();
 
 //=============================================================
 
@@ -54,7 +67,7 @@ void c_init(const char* name, bool canPauseContinue) {
 }
 
 void setSimpleWorker(simple_worker_callback callback) {
-	simple_worker = callback;
+	simpleWorker = callback;
 }
 
 bool registerService() {
@@ -65,7 +78,7 @@ bool registerService() {
 	if (StartServiceCtrlDispatcher(serviceTable) == FALSE) {
 		DWORD serviceDispatchError = GetLastError();
 		if (serviceDispatchError == ERROR_FAILED_SERVICE_CONTROLLER_CONNECT) {
-			simple_worker(); // replace with onFailure();
+			simpleWorker(); // replace with onFailure();
 		} else {
 			return false;
 		}
@@ -84,26 +97,43 @@ void WINAPI serviceMain() {
 
 	startup();
 
-	simple_worker();
+	SimpleServiceWrapper();
 
-	// exit();
+	exit();
 }
 
 void WINAPI controlHandler(DWORD CtrlCode) {
 	switch (CtrlCode) {
 		case SERVICE_CONTROL_STOP: {
+			if (STATUS.dwCurrentState == SERVICE_PAUSED) {
+				controlStopOnPause();
+				break;
+			}
+
 			if (STATUS.dwCurrentState != SERVICE_RUNNING) { break; }
-			// control_stop();
+			controlStop();
 		} break;
+
+		case SERVICE_CONTROL_PAUSE:{
+			if (STATUS.dwCurrentState != SERVICE_RUNNING) { break; }
+			controlPause();
+		} break;
+
+		case SERVICE_CONTROL_CONTINUE: {
+			if (STATUS.dwCurrentState != SERVICE_PAUSED) { break; }
+			controlContinue();
+		}break;
 
 		case SERVICE_CONTROL_SHUTDOWN: {
 			if (STATUS.dwCurrentState != SERVICE_RUNNING) { break; }
-			// control_stop();
+			controlStop();
 		} break;
 
-		default: {
-
+		case SERVICE_CONTROL_INTERROGATE: { // Deprecated, but you never know... let's just handle it.
+			SetServiceStatus(STATUS_HANDLE, &STATUS);
 		} break;
+
+		default: { } break;
 	}
 }
 
@@ -114,7 +144,7 @@ void startup() {
 	STATUS.dwServiceSpecificExitCode = 0;
 	setState(SERVICE_START_PENDING);
 
-	// on_startup();
+	// startup_callback();
 
 	STOP_EVENT = CreateEvent(NULL, TRUE, FALSE, NULL);
 	PAUSE_EVENT = CreateEvent(NULL, TRUE, FALSE, NULL);
@@ -123,6 +153,65 @@ void startup() {
 	setAcceptedControls(true);
 
 	setState(SERVICE_RUNNING);
+}
+
+void SimpleServiceWrapper() {
+	while (WaitForSingleObject(STOP_EVENT, 0) != WAIT_OBJECT_0) {
+		// Pause on pauseEvent
+		if (WaitForSingleObject(PAUSE_EVENT, 0) != WAIT_OBJECT_0) {
+			simpleWorker();
+
+		} else {
+			confirmPause();
+			// Wait for continue to be thrown
+			if (WaitForSingleObject(CONTINUE_EVENT, 0) != WAIT_OBJECT_0) {
+				
+			} else {
+				confirmContinue();
+			}
+		}
+	}
+}
+
+void controlStop() {
+	setState(SERVICE_STOP_PENDING);
+	setAcceptedControls(false);
+	SetEvent(STOP_EVENT);
+}
+
+void controlPause() {
+	setState(SERVICE_PAUSE_PENDING);
+	SetEvent(PAUSE_EVENT);
+}
+
+void controlContinue() {
+	setState(SERVICE_CONTINUE_PENDING);
+	setAcceptedControls(false);
+	ResetEvent(PAUSE_EVENT);
+	SetEvent(CONTINUE_EVENT);
+}
+
+void confirmContinue() {
+	setAcceptedControls(true);
+	ResetEvent(CONTINUE_EVENT);
+	setState(SERVICE_RUNNING);
+}
+
+void controlStopOnPause() {
+	setAcceptedControls(false);
+	setState(SERVICE_STOP_PENDING);
+	SetEvent(STOP_EVENT);
+	SetEvent(CONTINUE_EVENT);
+}
+
+void exit() {
+	// exitCallback();
+	CloseHandle(STOP_EVENT);
+	CloseHandle(PAUSE_EVENT);
+	CloseHandle(CONTINUE_EVENT);
+	CloseHandle(WORKER_PAUSED);
+	CloseHandle(WORKER_CONTINUED);
+	setState(SERVICE_STOPPED);
 }
 
 void setAcceptedControls(bool on) {

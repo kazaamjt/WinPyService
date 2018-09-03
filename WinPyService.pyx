@@ -28,23 +28,9 @@ class ServiceFailedToRegister(Exception):
 class MissingWorker(Exception):
 	pass
 
-##### helpers ###########################################
-cdef char* _str_to_cstr(str name):
-	cdef bytes py_bytes = name.encode()
-	cdef char* c_name = py_bytes
-	return c_name
-
-##### callbacks #########################################
-# Define as empty function to avoid NoneType Errors
-def worker():
-	pass
-
-cdef void simple_worker_wrapper():
-	worker()
-
 ##### Classes ###########################################
 class WinService:
-	def __init__(self, str name, bint enablePauseContinue):
+	def __init__(self, str name, bint enablePauseContinue=False):
 		self.worker_is_set = False
 		c_init(_str_to_cstr(name), enablePauseContinue)
 
@@ -62,3 +48,17 @@ class WinService:
 
 		else:
 			raise MissingWorker
+
+##### helpers ###########################################
+cdef char* _str_to_cstr(str name):
+	cdef bytes py_bytes = name.encode()
+	cdef char* c_name = py_bytes
+	return c_name
+
+##### callbacks #########################################
+# Define as empty function to avoid NoneType Errors
+def worker():
+	pass
+
+cdef void simple_worker_wrapper():
+	worker()

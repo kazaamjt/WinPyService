@@ -1,21 +1,64 @@
 # distutils: language = c++
+"""
+	Copyright (c) 2018 Yaron Vanhulst
 
-from libcpp.string cimport string
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-cdef extern from "WinService.hpp":
-	cdef cppclass WindowsService:
-		WindowsService(string _name, bint _canPauseContinue)
-		int run()
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-cdef class WinService:
-	cdef str name
-	cdef WindowsService *_this
-	def __cinit__(self,str _name, bint _canPauseContinue):
-		self.name = _name
-		cdef string cpp_name = _name.encode('UTF-8')
-		self._this = new WindowsService(cpp_name, _canPauseContinue)
+	See LICENSE.MD for more info.
+"""
+
+cdef extern from "Service.hpp":
+	void c_init(const char *name, bint )
+	bint registerService()
+	ctypedef void (*simple_worker_callback)()
+	void setSimpleWorker(simple_worker_callback)
+
+##### Exceptions ########################################
+class ServiceFailedToRegister(Exception):
+	pass
+
+class MissingWorker(Exception):
+	pass
+
+##### helpers ###########################################
+cdef char* _str_to_cstr(str name):
+	cdef bytes py_bytes = name.encode()
+	cdef char* c_name = py_bytes
+	return c_name
+
+##### callbacks #########################################
+# Define as empty function to avoid NoneType Errors
+def worker():
+	pass
+
+cdef void simple_worker_wrapper():
+	worker()
+
+##### Classes ###########################################
+class WinService:
+	def __init__(self, str name, bint enablePauseContinue):
+		self.worker_is_set = False
+		c_init(_str_to_cstr(name), enablePauseContinue)
+
+	def set_simple_worker(self, callback):
+		global worker
+		worker = callback
+		cdef simple_worker_callback c_callback = simple_worker_wrapper
+		setSimpleWorker(c_callback)
+		self.worker_is_set = True
 
 	def run(self):
-		cdef int return_val = self._this.run()
-		if return_val:
-			exit()
+		if self.worker_is_set:
+			if not registerService(): # Call register, which kickstarts our C service code.
+				raise ServiceFailedToRegister
+
+		else:
+			raise MissingWorker

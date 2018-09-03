@@ -1,3 +1,6 @@
+# Python
+/__pycache__
+
 # Cython
 WinPyService.cpp
 WinPyService.cp37-win_amd64.pyd

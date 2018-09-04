@@ -18,12 +18,15 @@ import WinPyService
 def example_worker():
 	x = 2 + 2
 	print(4) #Print doesn't do anything when running as a service.
+	lightSleep(10)
 
 def init():
 	service = WinPyService.WinService ('some_name', enablePauseContinue=True)
 	service.set_simple_worker(example_worker) # Pass the example_worker function
 	service.run()
 ```
+
+NOTE: Do not use sleep to wait, instead use the interuptable `lightSleep(int seconds)`.
 
 You can now add the service with powershell or sc.exe:  
 (Make sure you are running from an elevated prompt)
@@ -34,4 +37,4 @@ New-Service -Name 'test' -BinaryPathName 'C:\Program Files\Python37\python.exe p
 
 ## Building the module
 
-`python.exe .\setup.py build ext --inplace`
+`python.exe .\setup.py build_ext --inplace`

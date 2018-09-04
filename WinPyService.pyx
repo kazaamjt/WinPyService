@@ -18,6 +18,7 @@ copies or substantial portions of the Software.
 cdef extern from "Service.hpp":
 	void c_init(const char *name, bint )
 	bint registerService()
+	void interuptableSleep()
 	ctypedef void (*simple_worker_callback)()
 	void setSimpleWorker(simple_worker_callback)
 
@@ -48,6 +49,13 @@ class WinService:
 
 		else:
 			raise MissingWorker
+
+##### functions #########################################
+cpdef void lightSleep(int seconds):
+	cdef int loops = seconds * 10
+	while loops:
+		interuptableSleep()
+		loops -= 1
 
 ##### helpers ###########################################
 cdef char* _str_to_cstr(str name):

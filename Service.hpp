@@ -239,3 +239,21 @@ void setState(DWORD state) {
 		// log failure
 	}
 }
+
+void interuptableSleep() {
+	if (WaitForSingleObject(STOP_EVENT, 0) != WAIT_OBJECT_0) {
+		// Pause on pauseEvent
+		if (WaitForSingleObject(PAUSE_EVENT, 0) != WAIT_OBJECT_0) {
+			SleepEx(100, FALSE);
+
+		} else {
+			confirmPause();
+			// Wait for continue to be thrown
+			if (WaitForSingleObject(CONTINUE_EVENT, 0) != WAIT_OBJECT_0) {
+				
+			} else {
+				confirmContinue();
+			}
+		}
+	}
+}
